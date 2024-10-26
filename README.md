@@ -1,4 +1,0 @@
-BiliBiliVideoDownload
-
-未完成项目
-该项目需要您使用Ffmpeg，在互联网上下载完后将Ffmpeg放入项目里。
