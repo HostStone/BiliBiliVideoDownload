@@ -12,6 +12,7 @@ import time
 import urllib.parse
 import uuid
 import zipfile
+from pickletools import read_uint1
 
 import js2py
 from typing import BinaryIO
