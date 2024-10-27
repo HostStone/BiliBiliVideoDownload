@@ -12,13 +12,16 @@ import time
 import urllib.parse
 import uuid
 import zipfile
-from idlelib.debugger_r import close_subprocess_debugger
+from http.cookiejar import domain_match
 
 import js2py
-from typing import BinaryIO
-
 import lxml.etree as etree
 import requests
+import alive_progress
+
+from json import JSONDecodeError
+
+from requests.cookies import cookiejar_from_dict
 
 WorkPath = os.path.split(__file__)[0]  # 获取工作目录
 FfmpegPath = os.path.join(WorkPath, "Ffmpeg/bin/ffmpeg.exe")  # 获取Ffmpeg目录，这仅限于Windows系统，不同系统请更换版本。
@@ -44,16 +47,21 @@ def ParseInputedCookie(CookieString: str):
     :param CookieString: 需要处理的Cookie字符串
     :return: 返回一个Cookie字典
     """
-
-    if not CookieString.strip():
-        return dict()
-    print("解析Cookie。")
-    groups = CookieString.split(";")
-    cookie = dict()
-    for s in groups:
-        k, v = tuple(s.split("="))
-        cookie.update({k.strip(): v.strip()})
-    return cookie
+    try:
+        cookieDict = json.loads(Cookie)
+        session = requests.session()
+        for d in cookieDict:
+            session.cookies.update(cookiejar_from_dict(d))
+    except JSONDecodeError:
+        if not CookieString.strip():
+            return dict()
+        print("解析Cookie。")
+        groups = CookieString.split(";")
+        cookie = dict()
+        for s in groups:
+            k, v = tuple(s.split("="))
+            cookie.update({k.strip(): v.strip()})
+        return cookie
 
 def DownloadVAData(URL: str, requestHead: dict):
     """
@@ -70,78 +78,74 @@ def DownloadVAData(URL: str, requestHead: dict):
     分片下载策略，
     """
 
-    cacheLen = 5 * (10 ** 6)  # 设置分片大小：5MB
+    cacheLen = 2 * (10 ** 6)  # 设置分片大小：2MB (你想调大也可以)
     dataSeek = 0  # 数据指针，方便检测下载进度
     print("分片大小：{}MB".format(cacheLen / 10 ** 6))
 
-    #下面代码到while循环是进度条的实现
-
-    dataLong, getDataLong = 0, False
-    scale, bar, progress = 0, 0, 0
-    downloadStart = time.perf_counter()
-    reSendCount = 0
-
     cache = open(os.path.join(WorkPath, ("DownloadCache/" + cacheName)), "wb")
 
+    reSendCount = 0 # 记录重新请求数据的次数
+
+    """
+    下面代码到第二个while循环是进度条的实现
+    """
+
+    # 先让服务器只发送一个字节，探测视频长度
+    requestHead.update({"range": "bytes=0-1"})
+    web: requests.models.Response = requests.get(URL, headers=requestHead)
+
     while True:
-        requestHead.update(
-            {
-                "range": "bytes={0}-{1}".format(dataSeek, dataSeek + cacheLen),
-            }
-        )
-        web: requests.models.Response = requests.get(URL, headers=requestHead)
         responseHeader = web.headers  # 响应头
+        dataLong = int(responseHeader.get("Content-Range").split("/")[1])
+        print("数据大小：", dataLong)
+        scale = int(dataLong / cacheLen) + 1 # 视频总长除以每次下载的分片总长，就得到了进度条总长
+        if not scale:
+            scale = 1
 
+        # 必须要得到数据长度后才能继续进度条
+        if responseHeader.get("Content-Range"):
+            break
 
-        #进度条实现
-
-        if not getDataLong:
-            if responseHeader.get("Content-Range"):
-                dataLong = int(responseHeader.get("Content-Range").split("/")[1])
-                print("数据大小：", dataLong)
-                scale = int(dataLong / cacheLen)
-                if not scale:
-                    scale = 1
-                    bar = scale
-                getDataLong = True
-        else:
-            # 进度条实现
-            progress = (bar / scale) * 100
-            during = time.perf_counter() - downloadStart
-            print("\r               {:^3.0f}%[{}->{}]{:.2f}s".format(
-                progress,
-                "*" * int((bar / scale) * 100),
-                "." * int(((scale - bar) / scale) * 100),
-                during
-            ), end="")
-            bar += 1
-
-        """一般206响应码表示正常返回数据，如果响应码不是206，则一般判定为数据下载完，服务器报错"""
-
-        if web.status_code == 206:
-            data = web.content
-            length: int = len(data)
-            if length != int(responseHeader.get("Content-Length")):  # 检查数据长度，如果不匹配，则认定数据不完整，要求服务器重发
-                reSendCount += 1
-                bar -= 1
-                continue
-            cache.write(data)
-            cache.flush()
-            dataSeek += cacheLen + 1
-        else:
-
-            """服务器报错时，一般还有部分数据没有下载完，这时一次性请求完所有数据"""
-
+    with alive_progress.alive_bar(scale) as progressBarObject:
+        while True:
             requestHead.update(
                 {
-                    "range": "bytes={0}-".format(dataSeek),
+                    "range": "bytes={0}-{1}".format(dataSeek, dataSeek + cacheLen),
                 }
             )
-            web: requests.models.Response = requests.get(URL, headers=requestHead)
-            data: bytes = web.content
-            cache.write(data)
-            cache.close()
-            break
+            web = requests.get(URL, headers=requestHead)
+            responseHeader = web.headers  # 响应头
+
+            """一般206响应码表示正常返回数据，如果响应码不是206，则一般判定为数据下载完，服务器报错"""
+
+            if web.status_code == 206:
+                data = web.content
+                length: int = len(data)
+                if length != int(responseHeader.get("Content-Length")):
+                    # 检查数据长度，如果不匹配，则认定数据不完整，要求服务器重发
+                    reSendCount += 1
+                    continue
+                else:
+                    # else里面也是进度条的实现（更新进度条）。
+                    progressBarObject(1)
+
+                cache.write(data)
+                cache.flush()
+                dataSeek += cacheLen + 1
+            else:
+                """服务器报错时，一般还有部分数据没有下载完，这时一次性请求完所有数据"""
+
+                requestHead.update(
+                    {
+                        "range": "bytes={0}-".format(dataSeek),
+                    }
+                )
+                web: requests.models.Response = requests.get(URL, headers=requestHead)
+                data: bytes = web.content
+                cache.write(data)
+                cache.close()
+                break
+
     print("\n\n重新请求数据次数：", reSendCount)
     cache.close()
     web.close()
@@ -284,7 +288,7 @@ def ParseURL(URL: str):
     tempAudioPath: str = DownloadVAData(audioLink, requestHead)
 
     # 因为是返回文件路径，所以可以直接使用open方法返回IO方便下面代码调用，这里是方便获取封面数据。
-    cover_stream: BinaryIO = open(DownloadCoverPicture(coverLink, requestHead), "rb")
+    cover_stream = open(DownloadCoverPicture(coverLink, requestHead), "rb")
 
     """
     因为画面和音频是分开的，所以要把它们进行合并。Ffmpeg是一个开源的视频处理程序，使用它可以方便地处理视频数据，如合成，转码等。
