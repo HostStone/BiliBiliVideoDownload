@@ -4,6 +4,7 @@
 @date 2022年10月5日20:29:21
 @project Bilibili视频爬取脚本
 编写方法DownloadVAData时的参考文章：https://zhuanlan.zhihu.com/p/148988473
+参照BilibiliVideoDownload.py，修改于2024/10/27 9:21。
 """
 import json
 import os
@@ -12,8 +13,6 @@ import time
 import urllib.parse
 import uuid
 import zipfile
-from http.cookiejar import domain_match
-
 import js2py
 import lxml.etree as etree
 import requests
@@ -28,7 +27,7 @@ FfmpegPath = os.path.join(WorkPath, "Ffmpeg/bin/ffmpeg.exe")  # 获取Ffmpeg目�
 
 Cookie:str = ""
 UserAgentHead: str = ""
-
+# 检查必要文件
 if not os.path.exists(os.path.join(WorkPath, "CookieConfig.txt")):
     with open(os.path.join(WorkPath, "CookieConfig.txt"),"w",encoding="UTF-8"):pass
 else:
@@ -40,6 +39,11 @@ if not os.path.exists(os.path.join(WorkPath, "UserAgentHeadConfig.txt")):
 else:
     with open(os.path.join(WorkPath, "UserAgentHeadConfig.txt"),"r",encoding="UTF-8") as cf:
         UserAgentHead = cf.read()
+# 检查必要文件夹
+if not os.path.exists(os.path.join(WorkPath, "DownloadCache")):
+    os.mkdir(os.path.join(WorkPath, "DownloadCache"))
+if not os.path.exists(os.path.join(WorkPath, "FetchedData")):
+    os.mkdir(os.path.join(WorkPath, "FetchedData"))
 
 def ParseInputedCookie(CookieString: str):
     """
