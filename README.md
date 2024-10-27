@@ -2,6 +2,7 @@
 这目前算是一个潦草的项目，后期确实要做成软件类型再修葺罢。  
 它其实有窗体版本，不过我把它砍掉了，后期有必要再加回来罢。  
 **项目依赖Ffmpeg，请将下载完毕后的的Ffmpeg目录放入该项目的主目录里。**
+**一定要Python12一下的版本（js2py在Python12工作会出问题！！！）**
 ## 项目结构说明
 ### 主目录文件说明
 - BilibiliVideoDownload.py 目前已被废弃，你得使用 BilibiliVideoDownload2.py. 虽然前者被废弃，但我仍然把它保存在项目里，主要是里面有一项功能并没有在 BilibiliVideoDownload2.py 写，而且 BilibiliVideoDownload.py 里写得很冗杂。后期我会把这项功能加入到 BilibiliVideoDownload2.py 来的。  
