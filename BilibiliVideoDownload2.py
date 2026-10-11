@@ -22,7 +22,7 @@ from json import JSONDecodeError
 
 from requests.cookies import cookiejar_from_dict
 
-WorkPath = os.path.split(__file__)[0]  # 获取工作目录
+WorkPath = str(os.path.split(__file__)[0])  # 获取工作目录
 FfmpegPath = os.path.join(WorkPath, "Ffmpeg/bin/ffmpeg.exe")  # 获取Ffmpeg目录，这仅限于Windows系统，不同系统请更换版本。
 
 Cookie:str = ""
@@ -232,7 +232,7 @@ def ParseURL(URL: str):
         describe: str = "-"
 
     # 获取视频封面图片数据的连接
-    coverLink = urllib.parse.urljoin("https:", html.xpath("//meta[contains(@itemprop, 'thumbnailUrl')]/@content")[0])
+    coverLink = urllib.parse.urljoin("https:", html.xpath("//img[contains(@id, 'wxwork-share-pic')]/@src")[0])
 
     """打印视频信息"""
 
@@ -244,13 +244,20 @@ def ParseURL(URL: str):
     第一行就是视频数据链接获取的实现，它是一段内联JavaScript脚本，主要就是存储一个“window.__playinfo__”变量，这个变量又存储视频数据链接。
     """
 
-    data = html.xpath("/html/head/script[4]/text()")
+    data = ""
+    for d in html.xpath("/html/head//script/text()"):
+        if "playinfo" in d:
+            data = d
+            break
+    else:
+        raise Exception("没有playinfo")
 
     """
     接下来使用js2py解析javascript文件
     """
     content = js2py.EvalJs()
-    content.execute(data[0])
+    content.execute(data)
+    
     playInfo = js2py.base.JsObjectWrapper.to_dict(content.window.__playinfo__)
 
     # 旧版的实现方式
@@ -331,12 +338,16 @@ try:
     ParseURL(url)
 except requests.exceptions.MissingSchema as e:
     print("发生错误！", e)
+    raise
 except IndexError as e:
     print("发生错误！", e)
     print("发生此类错误，原因可能是没有输入正确的视频网址，请检查后重试。")
+    raise
 except KeyboardInterrupt:
     print("\n用户中断了操作。")
+    raise
 except requests.exceptions.ConnectTimeout as e:
     print("服务器响应超时：", e)
+    raise
 print("\n三秒后退出......")
 time.sleep(3)

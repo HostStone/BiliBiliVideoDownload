@@ -14,9 +14,9 @@ from selenium.webdriver.common.by import By
 WorkPath = os.path.split(__file__)[0]  # 获取工作目录
 browser = webdriver.Edge()
 browser.get("https://www.bilibili.com/")
-browser.find_element(by=By.XPATH, value="//*[@id='i_cecream']/div[2]/div[1]/div[1]/ul[2]/li[1]/li/div").click()
-while browser.find_elements(by=By.XPATH, value="//*[@id='i_cecream']/div[2]/div[1]/div[1]/ul[2]/li[1]/li/div"): pass
+browser.find_element(by=By.XPATH, value="//*[@id='app']/div[2]/div[1]/div[1]/div[3]/div/div[1]/div/div[1]/div").click()
+while browser.find_elements(by=By.XPATH, value="//div[@class='header-avatar-unlogin-inner']"): pass
 cookieDict:list = browser.get_cookies()
 with open(os.path.join(WorkPath, "CookieConfig.txt"),"w",encoding="UTF-8") as cookie:
-    cookie.write(json.dumps(cookieDict))
+    json.dump(cookieDict,cookie,ensure_ascii=False,indent=4)
 browser.close()
