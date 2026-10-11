@@ -60,8 +60,7 @@ _request_headers = \
     }
 
 """
-目前来讲的话，我还不清楚怎么自动获取Cookie
-如果没有cookie的话，是获取不了视频的链接的
+目前只能用Selmium模拟浏览器来加载Cookie
 """
 _cookies = dict()
 
