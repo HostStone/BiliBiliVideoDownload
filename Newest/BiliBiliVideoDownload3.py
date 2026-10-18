@@ -73,7 +73,8 @@ class VideoQuality:
     q_360p = "360p"
 
     code_4k = 120
-    code_1080p60fps = 116
+    code_1080p60fps = 112
+    code_1080p60fps2 = 116
     code_1080p = 80
     code_720p = 64
     code_480p = 32
@@ -85,6 +86,8 @@ class VideoQuality:
             case VideoQuality.code_4k:
                 return VideoQuality.q_4k
             case VideoQuality.code_1080p60fps:
+                return VideoQuality.q_1080p60fps
+            case VideoQuality.code_1080p60fps2:
                 return VideoQuality.q_1080p60fps
             case VideoQuality.code_1080p:
                 return VideoQuality.q_1080p
@@ -226,7 +229,7 @@ class DownloadSession:
         async with _semaphore:
             while True:
                 async with session.get(url=url, timeout=100, headers=request_head) as response:
-                    if response.status == 206:
+                    if response.status == 206 or response.status == 200:
                         data = await response.content.read()
                         length = len(data)
                         if length != int(response.headers.get("Content-Length")):
@@ -242,6 +245,7 @@ class DownloadSession:
 
                         return ret
                     else:
+                        print("resend")
                         origin_range = request_head["range"]
                         new = "-".join([origin_range.split("-")[0], ""])
                         request_head["range"] = new
@@ -339,7 +343,12 @@ async def get_video_info(url : str) -> PlayInfo:
             content = await response.text()  # 视频网页HTML
             root = etree.HTML(content)
             title = root.xpath("/html/head/title")[0].text
-            description = root.xpath("/html/body//span[@class='desc-info-text']")[0].text
+
+            if len(root.xpath("/html/body//span[@class='desc-info-text']")) > 0:
+                description = root.xpath("/html/body//span[@class='desc-info-text']")[0].text
+            else:
+                description = ""
+
             author = root.xpath("/html/head/meta[@name='author']")[0].get("content")
 
             info_meta = root.xpath("/html/body//div[@class='video-info-detail-list video-info-detail-content']//div/div/text()")
@@ -715,20 +724,18 @@ if __name__ == '__main__':
     if os.path.exists(os.path.join(_work_path, "cookies2.txt")):
         with open(os.path.join(_work_path, "cookies2.txt"), "r") as f:
             _config[cookie_settings] = f.read()
-        if not _config[cookie_settings].strip():
-            if os.path.exists(os.path.join(_work_path, "cookies.txt")):
-                with open(os.path.join(_work_path, "cookies.txt"), "r") as f:
-                    _config[cookie_settings] = f.read()
-                    _cookies_flag = CookieFlag.cookie
-            else:
-                with open(os.path.join(_work_path, "cookies.txt"), "w") as f:
-                    pass
-        else:
             _cookies_flag = CookieFlag.cookie2
     else:
         with open(os.path.join(_work_path, "cookies2.txt"), "w") as f: pass
 
-
+    if os.path.exists(os.path.join(_work_path, "cookies.txt")):
+        if _cookies_flag != CookieFlag.cookie2:
+            with open(os.path.join(_work_path, "cookies.txt"), "r") as f:
+                _config[cookie_settings] = f.read()
+                _cookies_flag = CookieFlag.cookie
+    else:
+        with open(os.path.join(_work_path, "cookies.txt"), "w") as f:
+            pass
 
     # 检查必要文件夹
     if not os.path.exists(os.path.join(_work_path, "DownloadCache")):
